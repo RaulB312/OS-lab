@@ -5,7 +5,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <stdint.h>
 #include <time.h>
 #include <sys/sysmacros.h>
@@ -103,9 +102,9 @@ void accessRights(struct stat sb)
         printf("Execute permission for others\n");
     printf("\n");
 }
-void regularFile(int i, struct stat sb, char *fileName)
+void regularFile(int i, struct stat st, char *fileName)
 {
-    if ( i!=0  && S_ISREG(sb.st_mode))
+    if ( i!=0  && S_ISREG(st.st_mode))
     {
         switch(tolower(choice[i]))
         {
@@ -113,21 +112,19 @@ void regularFile(int i, struct stat sb, char *fileName)
                 printf("File name : %s \n",fileName);
                 break;
             case 'd':
-                printf("Size  %ld bytes\n",sb.st_size);
+                printf("Size  %ld bytes\n",st.st_size);
                 break;
             case 'h':
-                printf("Number of hard links   %ld\n",sb.st_nlink);
+                printf("Number of hard links   %ld\n",st.st_nlink);
                 break;
             case 'm':
-                printf("Time of last modification %s",ctime(&sb.st_atime));
+                printf("Time of last modification %s",ctime(&st.st_atime));
                 break;
             case 'a':
-                //printf("Access rights %d %d\n",sb.st_uid,sb.st_gid);
-                accessRights(sb);
+                accessRights(st);
                 break;
             case 'l':
-                printf("Create a symbolic link give:link name -l \n");
-                printf("Introduce the name of the new link\n");
+                printf("Create a symbolic link; give:link name -l Introduce the name of the new link\n");
                 char link[100];
                 scanf("%s",link);
                 if(symlink(fileName,link) == -1)
@@ -167,10 +164,8 @@ void linkFile(int i, struct stat sb, char *fileName)
             case 'a':
                 accessRights(sb);
                 break;
-            
             default:
                 printf("Invalid Operation %c\n",choice[i]); 
-                
                 break;
         }
     }
@@ -220,34 +215,34 @@ void wrongOption(char *validCommands,char *choice)
         }
         printf("\n");
 }
-void menuFunction(struct stat sb,char *path)
+void menuFunction(struct stat st,char *path)
 {
     DIR *dir;
     regex_t extension;
     char *validCommands;
-        if (S_ISREG(sb.st_mode))
+        if (S_ISREG(st.st_mode))
         {
-            regFileMenu(sb,path);
+            regFileMenu(st,path);
             validCommands = "-ndhmal";
-            if(regcomp(&extension,"^-[ndhmal]+$",REG_EXTENDED) != 0)
+            if(regcomp(&extension,".c$",REG_EXTENDED) != 0)
                 printf("Error compiling the regular expression\n");
         }
-        if(S_ISLNK(sb.st_mode))
+        if(S_ISLNK(st.st_mode))
         {
-            symFileMenu(sb,path);
+            symFileMenu(st,path);
             validCommands = "-nldta";
-            if(regcomp(&extension,"^-[nldta]+$",REG_EXTENDED) != 0)
+            if(regcomp(&extension,".c$",REG_EXTENDED) != 0)
                 printf("Error compiling the regular expression");
         }
 
-        if(S_ISDIR(sb.st_mode))
+        if(S_ISDIR(st.st_mode))
         {
             dir = opendir(path);
             if(dir == NULL)
                 printf("Error could not open the directory");
             dirFileMenu(dir,path);
             validCommands = "-ndac";
-            if(regcomp(&extension,"^-[ndac]+$",REG_EXTENDED) != 0)
+            if(regcomp(&extension,".c$",REG_EXTENDED) != 0)
                 printf("Error compiling the regular expression");
         }
         printf("Enter your choice: ");
@@ -256,32 +251,64 @@ void menuFunction(struct stat sb,char *path)
         printf("Your choice %s  \n",choice);
         if(regexec(&extension,choice,0,NULL,0) != 0)
         {
-           wrongOption(validCommands,choice);
-            menuFunction(sb,path);
+            wrongOption(validCommands,choice);
+            menuFunction(st,path);
             strcpy(choice,"");
         }
         int i = 0;
         while(choice[i] != '\0') 
         {
-            regularFile(i,sb,path);
-            linkFile(i,sb,path);
-            directoryFile(i,sb,path,dir);
+            regularFile(i,st,path);
+            linkFile(i,st,path);
+            directoryFile(i,st,path,dir);
             i++;
         }
 }
+
+/*void process(struct stat st, char* path)
+{
+    pid_t pid = fork();
+    if (pid == -1)
+    {
+        perror("Fork failed\n");
+        exit(EXIT_FAILURE);
+    }
+    if (pid == 0)
+    {
+        printf("Current file is %s\n", path);
+        if (S_ISREG(st.st_mode))
+        {
+            //execlp("bash", "bash", );
+            printf("Regular file\n");
+
+        }
+
+        if (S_ISLNK(st.st_mode))
+        {
+            printf("Link file\n");
+        }
+
+        if (S_ISDIR(st.st_mode))
+        {
+            printf("Directory\n");
+        }
+    }
+}*/
+
 int main(int argc, char *argv[])
 {
-    struct stat sb;
+    struct stat st;
     if (argc != 2) 
     {
         fprintf(stderr, "Usage: %s <pathname>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    if (lstat(argv[1], &sb) == -1) 
+    if (lstat(argv[1], &st) == -1) 
     {
         perror("lstat");   
         exit(EXIT_FAILURE);
     }
     strcpy(path,argv[1]);
-    menuFunction(sb,path);
+    //process(st, path);
+    menuFunction(st,path);
 }
