@@ -11,45 +11,14 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <regex.h>
-
-
+#include <errno.h>
 
 char choice[32];
 char path[256];
 
-int ParseFileInDir(DIR *dir)
-{
-  int counter = 0;
-  struct dirent *entry;
-  struct stat file;
-  regex_t extension;
-    if(regcomp(&extension, ".c$", REG_EXTENDED))
-    {
-        printf("Error compiling the regular expression\n");
-        exit(EXIT_FAILURE);
-    }
-  while ((entry = readdir(dir))!=NULL)
-  {
-    char *name=entry->d_name;
-    char  auxpath[4096];
-    if(strlen(name) > 2)
-    {
-        
-        strcpy(auxpath,path);
-        strcat(auxpath,name);
-        if(lstat(auxpath,&file) == -1)
-        {
-            printf("Error could not get the file stats");
-            exit(EXIT_FAILURE);
-        }
-        if (S_ISREG(file.st_mode) && regexec(&extension, entry->d_name, 0, NULL, 0) == 0)
-            counter++;
-    }
-  }
-   closedir(dir);   
-   return counter;  
-}
-void regFileMenu(struct stat sb, char *path)
+
+
+void regFileMenu(struct stat st, char *path)
 {
         
     printf("Regular File: %s \n", path);
@@ -60,7 +29,7 @@ void regFileMenu(struct stat sb, char *path)
     printf("5. Access rights: -a \n");
     printf("6. Create a symbolic link give:link name: -l \n");
 }
-void symFileMenu(struct stat sb, char *path)
+void symFileMenu(struct stat st, char *path)
 {
         printf("Symbolic Link: %s \n", path);
         printf("1. Link name: -n \n");
@@ -77,31 +46,35 @@ void dirFileMenu(DIR *dir,char *path)
     printf("3. Access rights: -a \n");
     printf("4. Total number of files with .c extension: -c \n");
 }
-void accessRights(struct stat sb)
+
+void accessRights(struct stat st)
 {
     printf("Access rights for owner: \n \n");
-    if(sb.st_mode & S_IRUSR)
+    if(st.st_mode & S_IRUSR)
         printf("Read permission for owner\n");
-    if(sb.st_mode & S_IWUSR)
+    if(st.st_mode & S_IWUSR)
         printf("Write permission for owner\n");
-    if(sb.st_mode & S_IXUSR)
+    if(st.st_mode & S_IXUSR)
         printf("Execute permission for owner\n");
     printf("\nAccess rights for group: \n \n");
-    if(sb.st_mode & S_IRGRP)
+    if(st.st_mode & S_IRGRP)
         printf("Read permission for group\n");
-    if(sb.st_mode & S_IWGRP)
+    if(st.st_mode & S_IWGRP)
         printf("Write permission for group\n");
-    if(sb.st_mode & S_IXGRP)
+    if(st.st_mode & S_IXGRP)
         printf("Execute permission for group\n");
     printf("\nAccess rights for others: \n \n");
-    if(sb.st_mode & S_IROTH)
+    if(st.st_mode & S_IROTH)
         printf("Read permission for others\n");
-    if(sb.st_mode & S_IWOTH)
+    if(st.st_mode & S_IWOTH)
         printf("Write permission for others\n");
-    if(sb.st_mode & S_IXOTH)
+    if(st.st_mode & S_IXOTH)
         printf("Execute permission for others\n");
     printf("\n");
 }
+
+
+
 void regularFile(int i, struct stat st, char *fileName)
 {
     if ( i!=0  && S_ISREG(st.st_mode))
@@ -140,9 +113,11 @@ void regularFile(int i, struct stat st, char *fileName)
         }
     }
 }
-void linkFile(int i, struct stat sb, char *fileName)
+
+
+void linkFile(int i, struct stat st, char *fileName)
 {
-    if(i!=0 && S_ISLNK(sb.st_mode))
+    if(i!=0 && S_ISLNK(st.st_mode))
     {
         switch(tolower(choice[i]))
         {
@@ -154,15 +129,15 @@ void linkFile(int i, struct stat sb, char *fileName)
                 printf("Deleting the link : %s\n",fileName);    
                 break;
             case 'd':
-                printf("Size of the link %ld \n",sb.st_size);
+                printf("Size of the link %ld \n",st.st_size);
                 break;
             case 't':
-                struct stat sbNew;
-                stat(fileName, &sbNew);
-                printf("Size of the target %ld\n",sbNew.st_size);
+                struct stat stNew;
+                stat(fileName, &stNew);
+                printf("Size of the target %ld\n",stNew.st_size);
                 break;
             case 'a':
-                accessRights(sb);
+                accessRights(st);
                 break;
             default:
                 printf("Invalid Operation %c\n",choice[i]); 
@@ -170,10 +145,14 @@ void linkFile(int i, struct stat sb, char *fileName)
         }
     }
 }
-void directoryFile(int i,struct stat sb,char *fileName, DIR *dir)
+
+
+
+
+void directoryFile(int i,struct stat st,char *fileName, DIR *dir)
 {
     int nrCFiles=0;
-     if(i!= 0 && S_ISDIR(sb.st_mode))
+     if(i!= 0 && S_ISDIR(st.st_mode))
         {
             switch (tolower(choice[i]))
             {
@@ -181,12 +160,12 @@ void directoryFile(int i,struct stat sb,char *fileName, DIR *dir)
                 printf("Directory name : %s \n",fileName);
                 break;
             case 'd':
-                struct stat sbNew2;
-                stat(fileName,&sbNew2);
-                printf("Size of the directory: %ld \n",sbNew2.st_size);
+                struct stat stNew2;
+                stat(fileName,&stNew2);
+                printf("Size of the directory: %ld \n",stNew2.st_size);
                 break;
             case 'a':
-               accessRights(sb);
+               accessRights(st);
                 break;
             case 'c':
             strcat(path,"/");
@@ -199,6 +178,9 @@ void directoryFile(int i,struct stat sb,char *fileName, DIR *dir)
             }
         }
 }
+
+
+
 void wrongOption(char *validCommands,char *choice)
 {
      int charIndex = 0;
@@ -215,6 +197,122 @@ void wrongOption(char *validCommands,char *choice)
         }
         printf("\n");
 }
+
+
+
+
+void handle_regular_file(char *file_name) {
+    struct stat st;
+    if (lstat(file_name, &st) == -1) {
+        printf("Error could not get the file stats: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    validCommands = "-ndhmal";
+    regFileMenu(st, file_name);
+    int i = 0;
+    while (choice[i] != '\0') {
+        
+        regularFile(i, st, file_name);
+        i++;
+    }
+}
+
+void handle_symbolic_link(char *link_name) {
+    struct stat st;
+    if (lstat(link_name, &st) == -1) {
+        printf("Error could not get the file stats: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    symFileMenu(st, link_name);
+    int i = 0;
+    while (choice[i] != '\0') {
+        linkFile(i, st, link_name);
+        i++;
+    }
+}
+
+void handle_directory(char *dir_name) {
+    DIR *dir = opendir(dir_name);
+    if (dir == NULL) {
+        printf("Error could not open directory: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    dirFileMenu(dir, dir_name);
+    int i = 0;
+    while (choice[i] != '\0') {
+        switch (choice[i]) {
+        directoryFile(i, st, dir_name, dir);
+        i++;
+    }
+    closedir(dir);
+}
+
+int ParseFileInDir(DIR *dir) {
+    int counter = 0;
+    struct dirent *entry;
+    regex_t extension;
+    if (regcomp(&extension, ".c$", REG_EXTENDED)) {
+        printf("Error compiling the regular expression\n");
+        exit(EXIT_FAILURE);
+    }
+    while ((entry = readdir(dir)) != NULL) {
+        char *name = entry->d_name;
+        char auxpath[4096];
+        if (strlen(name) > 2) {
+            strcpy(auxpath, path);
+            strcat(auxpath, name);
+            if (lstat(auxpath, &file) == -1) {
+                printf("Error could not get the file stats");
+                exit(EXIT_FAILURE);
+            }
+            if (S_ISREG(file.st_mode) && regexec(&extension, entry->d_name, 0, NULL, 0) == 0) {
+                // create a child process to handle the regular file
+                pid_t pid = fork();
+                if (pid == -1) {
+                    printf("Failed to create a child process for the regular file %s\n", auxpath);
+                    exit(EXIT_FAILURE);
+                } else if (pid == 0) { // child process
+                    printf("In the child process to handle the regular file %s\n", auxpath);
+                    regularFileMenu(file, auxpath);
+                    exit(EXIT_SUCCESS);
+                } else { // parent process
+                    wait(NULL);
+                }
+            } else if (S_ISLNK(file.st_mode)) {
+                // create a child process to handle the link file
+                pid_t pid = fork();
+                if (pid == -1) {
+                    printf("Failed to create a child process for the link file %s\n", auxpath);
+                    exit(EXIT_FAILURE);
+                } else if (pid == 0) { // child process
+                    printf("In the child process to handle the link file %s\n", auxpath);
+                    linkFileMenu(file, auxpath);
+                    exit(EXIT_SUCCESS);
+                } else { // parent process
+                    wait(NULL);
+                }
+            } else if (S_ISDIR(file.st_mode)) {
+                // create a child process to handle the directory
+                pid_t pid = fork();
+                if (pid == -1) {
+                    printf("Failed to create a child process for the directory %s\n", auxpath);
+                    exit(EXIT_FAILURE);
+                } else if (pid == 0) { // child process
+                    printf("In the child process to handle the directory %s\n", auxpath);
+                    dirFileMenu(auxpath);
+                    exit(EXIT_SUCCESS);
+                } else { // parent process
+                    wait(NULL);
+                }
+            }
+        }
+    }
+    closedir(dir);
+    return counter;
+}
+
+
+
 void menuFunction(struct stat st,char *path)
 {
     DIR *dir;
@@ -255,45 +353,9 @@ void menuFunction(struct stat st,char *path)
             menuFunction(st,path);
             strcpy(choice,"");
         }
-        int i = 0;
-        while(choice[i] != '\0') 
-        {
-            regularFile(i,st,path);
-            linkFile(i,st,path);
-            directoryFile(i,st,path,dir);
-            i++;
-        }
 }
 
-/*void process(struct stat st, char* path)
-{
-    pid_t pid = fork();
-    if (pid == -1)
-    {
-        perror("Fork failed\n");
-        exit(EXIT_FAILURE);
-    }
-    if (pid == 0)
-    {
-        printf("Current file is %s\n", path);
-        if (S_ISREG(st.st_mode))
-        {
-            //execlp("bash", "bash", );
-            printf("Regular file\n");
 
-        }
-
-        if (S_ISLNK(st.st_mode))
-        {
-            printf("Link file\n");
-        }
-
-        if (S_ISDIR(st.st_mode))
-        {
-            printf("Directory\n");
-        }
-    }
-}*/
 
 int main(int argc, char *argv[])
 {
@@ -309,6 +371,5 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
     strcpy(path,argv[1]);
-    //process(st, path);
     menuFunction(st,path);
 }
