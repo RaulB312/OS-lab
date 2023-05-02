@@ -77,40 +77,80 @@ void accessRights(struct stat st)
 
 void regularFile(int i, struct stat st, char *fileName)
 {
-    if ( i!=0  && S_ISREG(st.st_mode))
+    int pfd[2];
+    if(pipe(pfd)<0)
     {
-        switch(tolower(choice[i]))
+        perror("Pipe creation failed\n");
+        exit(1);
+    }
+    pid_t pid = fork();
+    if (pid == -1) 
+    {
+        printf("Failed to create a child process for the regular file %s\n", auxpath);
+        exit(EXIT_FAILURE);
+    } 
+    else if (pid == 0) 
+    { // child process
+        printf("In the child process to handle the regular file %s\n", auxpath);
+        
+
+        regularFileMenu(file, auxpath);
+        if ( i!=0  && S_ISREG(st.st_mode))
         {
-            case 'n':
-                printf("File name : %s \n",fileName);
-                break;
-            case 'd':
-                printf("Size  %ld bytes\n",st.st_size);
-                break;
-            case 'h':
-                printf("Number of hard links   %ld\n",st.st_nlink);
-                break;
-            case 'm':
-                printf("Time of last modification %s",ctime(&st.st_atime));
-                break;
-            case 'a':
-                accessRights(st);
-                break;
-            case 'l':
-                printf("Create a symbolic link; give:link name -l Introduce the name of the new link\n");
-                char link[100];
-                scanf("%s",link);
-                if(symlink(fileName,link) == -1)
-                {
-                    printf("Error creating the link");
-                    exit(EXIT_FAILURE);
-                }
-                printf("Link created successfully\n");
-                break;
-            default:
-                printf("Invalid Operation %c\n",choice[i]);
-                break;
+            switch(tolower(choice[i]))
+            {
+                case 'n':
+                    printf("File name : %s \n",fileName);
+                    break;
+                case 'd':
+                    printf("Size  %ld bytes\n",st.st_size);
+                    break;
+                case 'h':
+                    printf("Number of hard links   %ld\n",st.st_nlink);
+                    break;
+                case 'm':
+                    printf("Time of last modification %s",ctime(&st.st_atime));
+                    break;
+                case 'a':
+                    accessRights(st);
+                    break;
+                case 'l':
+                    printf("Create a symbolic link; give:link name -l Introduce the name of the new link\n");
+                    char link[100];
+                    scanf("%s",link);
+                    if(symlink(fileName,link) == -1)
+                    {
+                        printf("Error creating the link");
+                        exit(EXIT_FAILURE);
+                    }
+                    printf("Link created successfully\n");
+                    break;
+                default:
+                    printf("Invalid Operation %c\n",choice[i]);
+                    break;
+            }
         }
+        dup2(pfd[1],1);
+        regex_t extension;
+        if (regcomp(&extension, ".c$", REG_EXTENDED))
+        {
+            printf("Error compiling the regular expression\n");
+            exit(EXIT_FAILURE);
+        }
+        close(pfd[0]);
+        read();
+        if (S_ISREG(file.st_mode) && regexec(&extension, fileName, 0, NULL, 0) == 0)
+        {
+            execlp("bash", "bash", "script.sh", auxpath, "errors.txt", NULL); /* child process shall execute the ls command */
+            printf("Error calling exec\n");
+        }
+        exit(EXIT_SUCCESS);
+    } 
+    else 
+    { // parent process
+        wait(NULL);
+        close(pfd[1]); /* close the writting end of the pipe */
+        close(pfd[0]); /* close the reading end of pipe after reading operating has finished */
     }
 }
 
@@ -179,8 +219,6 @@ void directoryFile(int i,struct stat st,char *fileName, DIR *dir)
         }
 }
 
-
-
 void wrongOption(char *validCommands,char *choice)
 {
      int charIndex = 0;
@@ -197,10 +235,6 @@ void wrongOption(char *validCommands,char *choice)
         }
         printf("\n");
 }
-
-
-
-
 void handle_regular_file(char *file_name) {
     struct stat st;
     if (lstat(file_name, &st) == -1) {
@@ -216,7 +250,6 @@ void handle_regular_file(char *file_name) {
         i++;
     }
 }
-
 void handle_symbolic_link(char *link_name) {
     struct stat st;
     if (lstat(link_name, &st) == -1) {
@@ -230,17 +263,17 @@ void handle_symbolic_link(char *link_name) {
         i++;
     }
 }
-
 void handle_directory(char *dir_name) {
     DIR *dir = opendir(dir_name);
-    if (dir == NULL) {
+    if (dir == NULL) 
+    {
         printf("Error could not open directory: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
     dirFileMenu(dir, dir_name);
     int i = 0;
-    while (choice[i] != '\0') {
-        switch (choice[i]) {
+    while (choice[i] != '\0') 
+    {
         directoryFile(i, st, dir_name, dir);
         i++;
     }
@@ -255,56 +288,57 @@ int ParseFileInDir(DIR *dir) {
         printf("Error compiling the regular expression\n");
         exit(EXIT_FAILURE);
     }
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = readdir(dir)) != NULL) 
+    {
         char *name = entry->d_name;
         char auxpath[4096];
-        if (strlen(name) > 2) {
+        if (strlen(name) > 2) 
+        {
             strcpy(auxpath, path);
             strcat(auxpath, name);
-            if (lstat(auxpath, &file) == -1) {
+            if (lstat(auxpath, &file) == -1) 
+            {
                 printf("Error could not get the file stats");
                 exit(EXIT_FAILURE);
             }
-            if (S_ISREG(file.st_mode) && regexec(&extension, entry->d_name, 0, NULL, 0) == 0) {
+            if (S_ISREG(file.st_mode) && regexec(&extension, entry->d_name, 0, NULL, 0) == 0) 
+            {
                 // create a child process to handle the regular file
                 pid_t pid = fork();
-                if (pid == -1) {
+                if (pid == -1) 
+                {
                     printf("Failed to create a child process for the regular file %s\n", auxpath);
                     exit(EXIT_FAILURE);
-                } else if (pid == 0) { // child process
+                } 
+                else if (pid == 0) 
+                { // child process
                     printf("In the child process to handle the regular file %s\n", auxpath);
-                    regularFileMenu(file, auxpath);
-                    exit(EXIT_SUCCESS);
-                } else { // parent process
+                    counter++;
+                } 
+                else 
+                { // parent process
                     wait(NULL);
                 }
-            } else if (S_ISLNK(file.st_mode)) {
+            } 
+            else if (S_ISLNK(file.st_mode)) 
+            {
                 // create a child process to handle the link file
                 pid_t pid = fork();
-                if (pid == -1) {
+                if (pid == -1) 
+                {
                     printf("Failed to create a child process for the link file %s\n", auxpath);
                     exit(EXIT_FAILURE);
-                } else if (pid == 0) { // child process
+                } 
+                else if (pid == 0) 
+                { // child process
                     printf("In the child process to handle the link file %s\n", auxpath);
-                    linkFileMenu(file, auxpath);
-                    exit(EXIT_SUCCESS);
-                } else { // parent process
+                    counter++;
+                } 
+                else 
+                { // parent process
                     wait(NULL);
                 }
-            } else if (S_ISDIR(file.st_mode)) {
-                // create a child process to handle the directory
-                pid_t pid = fork();
-                if (pid == -1) {
-                    printf("Failed to create a child process for the directory %s\n", auxpath);
-                    exit(EXIT_FAILURE);
-                } else if (pid == 0) { // child process
-                    printf("In the child process to handle the directory %s\n", auxpath);
-                    dirFileMenu(auxpath);
-                    exit(EXIT_SUCCESS);
-                } else { // parent process
-                    wait(NULL);
-                }
-            }
+            } 
         }
     }
     closedir(dir);
